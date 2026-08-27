@@ -1,0 +1,46 @@
+# Scripted model responses for the acme-v1 demo, so it runs with no API key.
+#
+# Quotes are resolved to character offsets against the *parsed* document text
+# at run time, never hand-written. The citation a reviewer clicks is therefore
+# a real span in real bytes, and the same verifier that guards a live run
+# guards this one. A quote that does not appear in its document fails
+# verification exactly as a hallucination would.
+
+documents:
+  msa:
+    doc_type: MSA
+    facts:
+      - {field: payment_terms, value: "Net 30", quote: "Net 30 days from the invoice date"}
+      - {field: hourly_rate, value: "USD 145", quote: "USD 145 per hour"}
+
+  amendment-01:
+    doc_type: AMENDMENT
+    facts:
+      - {field: payment_terms, value: "Net 45", quote: "Net 45 days from the invoice date"}
+
+  amendment-02:
+    doc_type: AMENDMENT
+    facts:
+      - {field: payment_terms, value: "Net 45", quote: "Net 45 days from the invoice date"}
+
+  appendix-a:
+    doc_type: MSA
+    facts:
+      - {field: hourly_rate, value: "USD 145", quote: "USD 145 per hour"}
+
+  invoice-4471:
+    doc_type: INVOICE
+    facts:
+      - {field: payment_terms, value: "Net 30", quote: "Net 30 days from invoice date"}
+
+  sow-002:
+    doc_type: SOW
+    facts:
+      - {field: hourly_rate, value: "USD 145", quote: "USD 145 per"}
+      - {field: payment_terms, value: "Net 45", quote: "Net 45 days from the invoice date"}
+
+audit:
+  no-automatic-renewal:
+    verdict: "yes"
+    doc_id: msa
+    quote: "renews automatically"

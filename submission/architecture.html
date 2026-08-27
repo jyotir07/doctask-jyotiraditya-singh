@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>doctask — Architecture</title>
+<style>
+  :root{
+    --ink:#14181f; --muted:#5b6472; --line:#c9d1dc; --bg:#fbfcfd;
+    --panel:#ffffff; --accent:#1f5fbf; --accent-soft:#e8f0fc;
+    --warn:#b4531a; --warn-soft:#fcefe4; --good:#1d6b4f; --good-soft:#e4f4ec;
+    --gate:#7a2f8f; --gate-soft:#f4e9f7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:28px 32px;background:var(--bg);color:var(--ink);
+    font:14px/1.5 "Segoe UI",-apple-system,Helvetica,Arial,sans-serif;}
+  h1{font-size:23px;margin:0 0 2px;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 18px}
+  .band{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:14px 16px;margin-bottom:12px}
+  .band > h2{font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 10px;font-weight:700}
+  .flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+  .step{border:1px solid var(--line);border-radius:8px;background:#fff;
+    padding:8px 11px;min-width:96px;flex:1}
+  .step b{display:block;font-size:12.5px}
+  .step span{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+  .arrow{display:flex;align-items:center;color:var(--line);font-size:17px;
+    padding:0 6px;font-weight:700}
+  .branch{border-left:3px solid var(--warn);background:var(--warn-soft);
+    border-radius:0 6px 6px 0;padding:7px 10px;margin-top:8px;font-size:11.5px}
+  .branch b{color:var(--warn)}
+  .gate{border:2px solid var(--gate);background:var(--gate-soft)}
+  .gate b{color:var(--gate)}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .kv{border:1px solid var(--line);border-radius:8px;background:#fff;padding:11px 13px}
+  .kv h3{margin:0 0 6px;font-size:12.5px}
+  .kv p{margin:0;color:var(--muted);font-size:11.5px;line-height:1.45}
+  code{background:#eef1f5;padding:1px 4px;border-radius:3px;font-size:11px;
+    font-family:"Cascadia Code",Consolas,monospace}
+  .inv{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}
+  .pill{font-size:10.5px;border-radius:999px;padding:3px 8px;border:1px solid;
+    background:var(--good-soft);border-color:#b9dfcd;color:var(--good);font-weight:600}
+  .pill.red{background:var(--warn-soft);border-color:#eec6a8;color:var(--warn)}
+  .store{border:1px dashed var(--accent);background:var(--accent-soft);
+    border-radius:8px;padding:9px 12px;font-size:11.5px}
+  .store b{color:var(--accent)}
+  .note{font-size:11px;color:var(--muted);margin-top:7px;font-style:italic}
+  .surfaces{display:flex;gap:8px;flex-wrap:wrap}
+  .surf{flex:1;min-width:130px;border:1px solid var(--line);border-radius:8px;
+    padding:8px 11px;background:#fff;font-size:11.5px}
+  .surf b{display:block;font-size:12.5px;margin-bottom:2px}
+  footer{color:var(--muted);font-size:10.5px;margin-top:14px;text-align:center}
+  @media print{body{padding:0;background:#fff}.band{break-inside:avoid}}
+</style>
+</head>
+<body>
+
+<h1>doctask — architecture</h1>
+<p class="sub">Vendor contracts, amendments and invoices → one grounded Obligation Register.
+Every claim cites its source bytes; a human gates every commit.</p>
+
+<div class="band">
+  <h2>Movement 1 — Understand</h2>
+  <div class="flow">
+    <div class="step"><b>ingest</b><span>sha256 content address<br>6 declared formats</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>classify</b><span>doc type + confidence</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>extract</b><span>closed schema<br>1 bounded repair</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>verify</b><span>re-read source<br>[start:end]</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>entities</b><span>deterministic<br>ratio test</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>reconcile</b><span>supersession<br>as data</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>compose</b><span>register entries</span></div>
+  </div>
+  <div class="branch"><b>Real branches, not labels:</b>
+    low confidence → escalate to a person · unknown type → skip with logged reason ·
+    citation fails → one re-extract, then kept as <code>unsupported</code>, never silently dropped ·
+    ambiguous vendor → escalate
+  </div>
+</div>
+
+<div class="band">
+  <h2>Movement 2 — Examine · staged by cost</h2>
+  <div class="flow">
+    <div class="step"><b>Stage 1 · deterministic</b>
+      <span>required · numeric_range · not_disputed · forbidden_value<br><strong>zero tokens</strong></span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>Stage 2 · judged</b>
+      <span>only rules stage 1 could not decide<br>pgvector retrieval → model</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>findings</b>
+      <span>each cites a real span<br>unverifiable → UNDECIDED</span></div>
+  </div>
+  <p class="note">The judge is injected into <code>evaluate()</code>, not reached for internally —
+  which is what makes “the free stage is provably free” a test rather than an intention.
+  Rule packs are YAML: a new rule is a data change, never a rewrite.</p>
+</div>
+
+<div class="band">
+  <h2>The gate — a durable suspension point</h2>
+  <div class="flow">
+    <div class="step gate"><b>AWAITING_REVIEW</b><span>proposal persisted to PostgreSQL<br>the process may exit entirely</span></div>
+    <div class="arrow">→</div>
+    <div class="step gate"><b>per-item decisions</b><span>approve / reject + reason<br>rejecting one keeps the rest</span></div>
+    <div class="arrow">→</div>
+    <div class="step gate"><b>commit</b><span>approved items only<br>silence ≠ approval</span></div>
+    <div class="arrow">→</div>
+    <div class="step gate"><b>verify post-state</b><span>success only if the deliverable<br>is genuinely in that state</span></div>
+  </div>
+  <p class="note">A <em>different process</em> can resume and commit — the gate is state in the
+  database, not a callback held in memory.</p>
+</div>
+
+<div class="band">
+  <h2>Movement 3 — Stay alive</h2>
+  <div class="cols">
+    <div class="kv"><h3>An update costs like an update</h3>
+      <p>Fact cache keyed <code>(doc_sha256, extractor_version)</code>. Re-ingesting known bytes
+      re-extracts nothing and re-embeds nothing. A rename never buys a second extraction.</p></div>
+    <div class="kv"><h3>Untouched is <em>provably</em> untouched</h3>
+      <p>Entry identity is <code>(vendor, field)</code> — deliberately excluding the value, so an
+      amendment updates an entry instead of appending beside it. Each entry renders from itself
+      alone, so non-modification is byte equality, not assertion.</p></div>
+  </div>
+</div>
+
+<div class="band">
+  <h2>Foundation</h2>
+  <div class="cols">
+    <div class="store"><b>Durable step journal</b> — deterministic step ids, outcome + tokens +
+      timing recorded per step. <b>Autocommit</b>, because a journal write buffered inside an open
+      transaction would be rolled back by the very crash it exists to survive. Cost is
+      <em>derived</em> from the journal, so a crashed run still reports what it spent.</div>
+    <div class="store"><b>PostgreSQL 16 + pgvector</b> — runs, steps, documents, facts, entries,
+      deliverables, chunks. Chunks carry the char offsets they were cut from, so a citation made
+      while reading a retrieved passage still verifies against the original document.</div>
+  </div>
+  <p class="note">No LangGraph: its checkpointer re-executes a node interrupted mid-flight and
+  re-pays for the model call inside it. The unit that must not repeat is the <em>provider call</em>,
+  not the node — so the journal does that job, and the graph layer would add a dependency without
+  adding a capability.</p>
+</div>
+
+<div class="band">
+  <h2>Three surfaces, one set of operations</h2>
+  <div class="surfaces">
+    <div class="surf"><b>REST · FastAPI</b>runs · ingest · review · decisions · resume · cost · provenance · deliverable</div>
+    <div class="surf"><b>MCP server</b>the same operations as tools — a machine drives the whole flow, gate included</div>
+    <div class="surf"><b>CLI</b><code>make demo</code> — a third client, not a fourth implementation</div>
+    <div class="surf"><b>Provider seam</b>deterministic fake (counts calls) · Anthropic adapter <em>(stub)</em></div>
+  </div>
+</div>
+
+<div class="band">
+  <h2>Ten invariants — written as failing tests before the code</h2>
+  <div class="inv">
+    <span class="pill">N1 no uncited claims</span>
+    <span class="pill">N2 no orders from documents</span>
+    <span class="pill">N3 untouched is byte-identical</span>
+    <span class="pill">N4 gate is honored</span>
+    <span class="pill">N5 success means success</span>
+    <span class="pill">N6 conflicts surface</span>
+    <span class="pill">N7 resume without loss</span>
+    <span class="pill">N8 concurrent runs isolated</span>
+    <span class="pill">N9 no double spend</span>
+    <span class="pill">N10 no secret leakage</span>
+  </div>
+  <p class="note">269 passed, 0 failed against real PostgreSQL — all ten invariants green.
+  30 planted mutations, all caught.</p>
+</div>
+
+<footer>doctask · built for the SuperDocs Round 2 engineering task · Jyotiraditya Singh</footer>
+
+</body>
+</html>

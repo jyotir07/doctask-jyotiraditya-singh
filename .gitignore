@@ -1,0 +1,13 @@
+.env
+*.key
+*.pem
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+node_modules/
+dist/
+build/
+*.egg-info/
+corpora/**/out/
+.DS_Store

@@ -1,0 +1,22 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: doctask-db
+    environment:
+      POSTGRES_USER: doctask
+      POSTGRES_PASSWORD: doctask
+      POSTGRES_DB: doctask
+    ports:
+      # 5433 on the host: a native PostgreSQL install commonly owns 5432.
+      - "5433:5432"
+    volumes:
+      - doctask-pgdata:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doctask -d doctask"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  doctask-pgdata:

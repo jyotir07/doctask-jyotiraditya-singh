@@ -1,0 +1,26 @@
+MASTER SERVICES AGREEMENT
+
+This Master Services Agreement ("Agreement") is entered into between Acme
+Industrial Supply Ltd ("Supplier"), a company registered in England, and
+Northwind Trading Co ("Customer") on 1 March 2024.
+
+1. SCOPE
+The Supplier shall provide industrial maintenance and professional services
+as described in each Statement of Work executed under this Agreement.
+
+2. PAYMENT TERMS
+Customer shall pay all undisputed invoices Net 30 days from the invoice date.
+Late payment attracts interest at 2% above base rate.
+
+3. RATES
+The agreed rate for principal consultants is USD 145 per hour, held firm for
+the initial term.
+
+4. TERM AND RENEWAL
+The initial term is twelve months from the effective date. This agreement
+renews automatically for successive twelve month periods unless either party
+gives written notice ninety days before expiry.
+
+5. LIABILITY
+The Supplier's aggregate liability is capped at the fees paid in the twelve
+months preceding the claim.

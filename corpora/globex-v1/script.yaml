@@ -1,0 +1,30 @@
+# Scripted model responses for the globex-v1 demo -- the second run.
+#
+# Different vendor, different documents, same declared format set. The brief
+# asks whether the system works the second time, not only in the demo.
+
+documents:
+  agreement:
+    doc_type: MSA
+    facts:
+      - {field: payment_terms, value: "Net 60", quote: "Net 60 days from the invoice date"}
+      - {field: hourly_rate, value: "USD 210", quote: "USD 210 per hour"}
+
+  variation-01:
+    doc_type: AMENDMENT
+    facts:
+      - {field: payment_terms, value: "Net 60", quote: "Net 60 days from the invoice date"}
+
+  invoice-8812:
+    doc_type: INVOICE
+    facts:
+      - {field: payment_terms, value: "Net 90", quote: "Net 90 days from invoice date"}
+
+  schedule-1:
+    doc_type: MSA
+    facts:
+      - {field: hourly_rate, value: "USD 210", quote: "USD 210 per hour"}
+
+audit:
+  no-automatic-renewal:
+    verdict: "no"

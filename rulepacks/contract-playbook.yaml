@@ -1,0 +1,52 @@
+# A contract playbook, as data.
+#
+# Adding a rule, changing a threshold, or covering a new document type is an
+# edit to this file and nothing else. That is the point: a new client's
+# playbook must never be a code change.
+
+name: contract-playbook
+version: 1
+description: Baseline commercial terms review for vendor agreements.
+
+rules:
+  - id: payment-terms-documented
+    severity: high
+    description: Every vendor must have documented payment terms.
+    applies_to: {field: payment_terms}
+    check: {kind: required}
+
+  - id: payment-terms-within-policy
+    severity: medium
+    description: Payment terms must fall between Net 15 and Net 60.
+    applies_to: {field: payment_terms}
+    check:
+      kind: numeric_range
+      pattern: 'Net\s+(\d+)'
+      minimum: 15
+      maximum: 60
+
+  - id: payment-terms-undisputed
+    severity: high
+    description: Payment terms must not be left in dispute between sources.
+    applies_to: {field: payment_terms}
+    check: {kind: not_disputed}
+
+  - id: hourly-rate-ceiling
+    severity: medium
+    description: Professional services rates must not exceed USD 200 per hour.
+    applies_to: {field: hourly_rate}
+    check:
+      kind: numeric_range
+      pattern: 'USD\s+([\d,]+)'
+      maximum: 200
+
+  - id: no-automatic-renewal
+    severity: high
+    description: Agreements must not renew automatically without written notice.
+    applies_to: {doc_type: MSA}
+    check:
+      kind: model
+      question: >-
+        Does this agreement renew automatically without requiring written
+        notice from the customer?
+      violation_when: "yes"
