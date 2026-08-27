@@ -22,10 +22,17 @@ SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 class Store:
     """Run state, journal, entries, and the deliverable."""
 
+    # DSNs whose schema this process has already applied. The API builds a
+    # Store per request, and re-executing the whole schema on every call costs
+    # dozens of round trips once the database is not on localhost.
+    _migrated_dsns: set[str] = set()
+
     def __init__(self, dsn: str) -> None:
         self._dsn = dsn
         self._conn = psycopg.connect(dsn, autocommit=True)
-        self._migrate()
+        if dsn not in Store._migrated_dsns:
+            self._migrate()
+            Store._migrated_dsns.add(dsn)
 
     @classmethod
     def connect(cls, dsn: str) -> "Store":

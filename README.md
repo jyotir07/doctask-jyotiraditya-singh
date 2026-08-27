@@ -340,6 +340,33 @@ the entire flow, gate included, without a human touching a UI.
 
 ---
 
+## Deploying
+
+`Dockerfile` and `render.yaml` build and run the REST surface. The entry point
+is `doctask.asgi:app`, which wires `build_app` from environment and adds a
+`/health` route that does a real database round trip — a check that only proved
+the process was alive would report green while every request failed on a dead
+connection.
+
+```bash
+docker build -t doctask-api .
+docker run -p 8000:8000 -e DOCTASK_DSN="postgresql://..." doctask-api
+```
+
+The database is deliberately not declared in `render.yaml`. Render's own free
+PostgreSQL expires after 90 days and this system needs `pgvector`, so the
+intended pairing is an external Neon or Supabase instance with its pooled
+connection string set as `DOCTASK_DSN` in the dashboard. Nothing secret is
+committed: that variable is declared `sync: false`.
+
+**What a deployed instance can and cannot do.** `AnthropicProvider` is a stub,
+so the only working provider is the deterministic fake, which answers from a
+script keyed on `(stage, doc_id)`. A hosted instance therefore serves every read
+path and the whole gate, but `POST /runs` fails with `MissingScriptEntry` unless
+the submitted documents match a script the process holds. That is a real
+limitation of the stub, not a deployment mistake, and it disappears when the
+live adapter exists.
+
 ## Assumptions I logged
 
 Full reasoning in [`PROGRESS.md`](PROGRESS.md). In brief:

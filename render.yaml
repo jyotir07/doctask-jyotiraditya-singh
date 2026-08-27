@@ -1,0 +1,21 @@
+# Render blueprint for the REST surface.
+#
+# The database is deliberately NOT declared here. Render's own free PostgreSQL
+# expires after 90 days, and this system needs the pgvector extension, so the
+# intended pairing is an external Neon or Supabase instance whose pooled
+# connection string is set as DOCTASK_DSN.
+
+services:
+  - type: web
+    name: doctask-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      # sync:false means "prompt me in the dashboard, never store it here".
+      # No connection string or key belongs in this file.
+      - key: DOCTASK_DSN
+        sync: false
+      - key: DOCTASK_PROVIDER
+        value: fake

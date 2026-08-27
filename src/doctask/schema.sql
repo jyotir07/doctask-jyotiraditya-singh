@@ -1,5 +1,11 @@
--- Applied on every Store.connect. Every statement is idempotent, so opening a
--- connection is safe whether the database is empty or already in use.
+-- Applied once per process per DSN, from Store. Every statement is idempotent,
+-- so applying it is safe whether the database is empty or already in use.
+
+-- Declared here rather than only in scripts/init-db.sql, because that file is
+-- a docker-entrypoint script and never runs on a managed PostgreSQL. Without
+-- this line the vector(64) column below fails with "type vector does not
+-- exist" the first time anyone points this at Neon, Supabase or RDS.
+CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS runs (
     run_id      TEXT PRIMARY KEY,
