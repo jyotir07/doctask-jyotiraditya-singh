@@ -218,6 +218,89 @@ any serial acquirer — Thoma Bravo, Vista Equity portfolio companies.
 
 ---
 
+---
+
+## Five markets I would NOT chase, and why
+
+These are the ones that look attractive on a slide and fail on contact. Each is
+argued from the product's own stated boundaries or from who already owns the
+workflow — not from taste.
+
+**1. FP&A and financial modelling.** The deliverable is a model, and the rail is
+explicit: reading a spreadsheet as a source is fine, but a product whose output
+is an edited spreadsheet is not what SuperDocs is. Finance teams will ask for
+exactly that within one meeting. *Evidence: the product's own stated
+boundary.* The adjacent use case that does work is #6 — the annual report and
+MD&A, where the output is prose.
+
+**2. Real-time collaborative drafting.** Agencies, newsrooms, and anyone whose
+pain is "three people editing at once." Live multiplayer with visible cursors is
+explicitly not being built, and Google Docs already gives this away free. Any
+deal here would be won on a feature that does not exist and is not planned.
+
+**3. Enterprise content management.** The SharePoint-replacement conversation.
+Buyers with this pain want an archive with permissions, retention and search —
+and the rail is clear that SuperDocs edits and produces documents rather than
+being the archive. These deals are large, slow, and would drag the roadmap
+toward storage. Worth actively declining.
+
+**4. Litigation e-discovery.** Tempting because the document volume is enormous
+and the budgets are real. But the work is *read, classify and produce* — you
+never edit evidence, because altering it is the one thing you must not do. The
+product's edge is precise in-place editing with review, and that edge simply
+does not apply. Relativity and Everlaw own the workflow with a decade of
+case-law-shaped tooling. *This is the clearest poor fit on my list:* the better
+the product gets at editing, the less relevant it is here.
+
+**5. Anything gated on a certification today.** This one complicates my own #3
+above, and I would rather say so than leave the list tidy. Clinical trials and
+regulated pharma are a genuinely strong *fit* for the capability — propagate one
+protocol amendment into many documents, each reviewed. But procurement in that
+segment asks for the compliance framework on the first call, and the honest
+answer is that certification is a roadmap conversation, not a current fact. So
+the use case is real and the *sales motion* is blocked until that changes.
+Selling into it now means either waiting out a long security review or implying
+something untrue. I would keep it on the roadmap and off the pipeline.
+
+The pattern across all five: SuperDocs wins where **the document already exists,
+changes often, and a wrong change is expensive.** It loses where the output is
+not a document, where the pain is concurrency, where the buyer wants storage, or
+where editing is forbidden.
+
+---
+
+## Where these companies listen, and what opens the door
+
+**Where they listen.** The technical buyers (#5 docs-drift, #10 diligence
+tooling) are reachable where engineers already are — their own developer
+communities, GitHub, and the tooling conversations on Hacker News and technical
+newsletters. The operational buyers (#1 legal ops, #2 bid teams, #4 insurance)
+do not read developer channels at all; they live in professional communities —
+CLOC for legal ops, APMP for bid and proposal teams, and the vertical trade
+press. The regulated buyers (#3, #6) are reachable almost exclusively through
+industry conferences and existing vendor relationships.
+
+**What opens the door.** Not a pitch — a document. The strongest opener for
+every use case above is the same shape: *"send us one of your own contracts and
+your playbook, and we will send back the clauses that breach it, marked up in
+the document itself, in under a minute."* It works because it is falsifiable,
+it costs the prospect nothing but one file, and it puts the product's actual
+differentiator — the change landing in place, reviewed — in front of them
+instead of describing it.
+
+The second opener, for the developer segment specifically, is to make the
+integration free to try: wire the docs-drift check to an OpenAPI diff so the
+trigger costs nothing and the first useful result arrives before anyone has
+spoken to sales.
+
+**One thing I would not do:** lead with AI. Every one of these buyers has been
+pitched an AI document tool this quarter. Leading with the review gate — *you
+approve every change before it lands, and nothing you did not approve is
+touched* — is the differentiated claim, and it is the one this product can
+actually prove.
+
+---
+
 ## If I had to pick one to build first
 
 **Contract redlining (#1).** Not because it is the largest market, but because
