@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>doctask — one page</title>
+<style>
+  :root{
+    --ink:#14181f; --muted:#5b6472; --line:#c9d1dc; --bg:#ffffff;
+    --accent:#1f5fbf; --accent-soft:#e8f0fc;
+    --warn:#b4531a; --warn-soft:#fcefe4; --good:#1d6b4f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:30px 36px;background:var(--bg);color:var(--ink);
+    font:13.5px/1.55 "Segoe UI",-apple-system,Helvetica,Arial,sans-serif;
+    max-width:1000px}
+  h1{font-size:24px;margin:0 0 3px;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:12.5px;margin:0 0 16px}
+  h2{font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--muted);margin:20px 0 8px;font-weight:700;
+    border-top:1px solid var(--line);padding-top:12px}
+  h2:first-of-type{border-top:none}
+  p{margin:0 0 9px}
+  .lead{background:var(--accent-soft);border-left:3px solid var(--accent);
+    padding:11px 14px;border-radius:0 6px 6px 0;margin-bottom:10px}
+  table{border-collapse:collapse;width:100%;margin:4px 0 10px;font-size:12.5px}
+  th,td{text-align:left;padding:6px 9px;border-bottom:1px solid var(--line);
+    vertical-align:top}
+  th{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--muted)}
+  td:first-child{width:40%}
+  ul{margin:0 0 9px;padding-left:19px}
+  li{margin-bottom:5px}
+  code{background:#eef1f5;padding:1px 4px;border-radius:3px;font-size:11.5px;
+    font-family:"Cascadia Code",Consolas,monospace}
+  .breaks{background:var(--warn-soft);border-left:3px solid var(--warn);
+    padding:11px 14px;border-radius:0 6px 6px 0}
+  .breaks strong{color:var(--warn)}
+  em.good{color:var(--good);font-style:normal;font-weight:600}
+  footer{color:var(--muted);font-size:10.5px;margin-top:18px;
+    border-top:1px solid var(--line);padding-top:9px}
+  @page{size:A4;margin:9mm}
+  @media print{
+    body{padding:0;max-width:none;font-size:8.9px;line-height:1.42}
+    h1{font-size:16px}.sub{font-size:9px;margin-bottom:8px}
+    h2{font-size:8.2px;margin:10px 0 5px;padding-top:7px;break-after:avoid}
+    p{margin-bottom:5px}
+    .lead{padding:7px 10px;margin-bottom:6px}
+    table{font-size:8.6px;margin-bottom:6px}
+    th,td{padding:3px 6px}
+    .breaks{padding:7px 10px;break-inside:avoid}
+    li{margin-bottom:2.5px}
+    code{font-size:8px}
+    footer{font-size:7.6px;margin-top:9px;padding-top:6px}
+  }
+</style>
+</head>
+<body>
+
+<h1>doctask — one page</h1>
+<p class="sub">An agentic system that owns a pile of vendor contracts, their amendments,
+and the invoices raised against them. Built for the SuperDocs Round 2 engineering task.</p>
+
+<div class="lead">
+<p><strong>What it is.</strong> It works out what each document is, extracts the facts that
+matter, notices where the documents disagree, and composes one grounded deliverable — an
+<strong>Obligation Register</strong> — in which every claim traces to the exact bytes it came
+from. It then checks that register against a rule pack written as data, and a human approves or
+rejects every proposed change, item by item, before anything commits.</p>
+<p style="margin-bottom:0"><strong>Who it is for.</strong> The person who has to answer “what are
+we actually obliged to do for this vendor, and which document says so?” — legal ops, procurement,
+finance. Today that answer costs an afternoon of reading and is stale the moment a new amendment
+lands.</p>
+</div>
+
+<h2>Results I can measure</h2>
+<table>
+  <tr><th>Claim</th><th>How it is measured</th></tr>
+  <tr><td>Ten invariants written as failing tests before the code</td>
+      <td><em class="good">All 10 green</em></td></tr>
+  <tr><td>The suite is real, not mock theater</td>
+      <td><strong>269 passed, 0 failed</strong>, against real PostgreSQL</td></tr>
+  <tr><td>The tests actually test something</td>
+      <td><code>mutation_check.py</code> plants <strong>30 realistic defects</strong>; all 30 turn the suite red</td></tr>
+  <tr><td>It runs with no API key</td>
+      <td>Whole suite and both demo corpora run on the deterministic fake</td></tr>
+  <tr><td>An update costs like an update</td>
+      <td>Fact cache keyed <code>(doc_sha256, extractor_version)</code>; re-ingest re-extracts and re-embeds nothing</td></tr>
+  <tr><td>Untouched is provably untouched</td>
+      <td>Entry-level content hashes and byte-equal rendering, not assertion</td></tr>
+  <tr><td>It knows what it spent</td>
+      <td>19 provider calls / 3508 in / 354 out on the 6-document demo, per stage, derived from the journal</td></tr>
+</table>
+<p>The mutation number is the one I would defend hardest. A passing test suite proves nothing
+about the tests; 30 planted defects all dying proves the suite has teeth.</p>
+
+<h2>The trade-offs, and why I think they are right</h2>
+<p><strong>I did not use LangGraph, which the brief suggests.</strong> Its checkpointer resumes
+graph <em>state</em>, but a node interrupted mid-flight is re-executed on resume — and that
+re-pays for the model call inside it. What this system needs is <em>work</em>-level idempotency:
+the thing that must not repeat is the provider call, not the node. That comes from a durable step
+journal keyed on deterministic step ids. Once that journal exists, the graph layer adds a
+dependency without adding a capability. <strong>What it costs me:</strong> no free visualisation,
+no pre-built node ecosystem, and I own retry semantics myself.</p>
+
+<p><strong>Entity resolution is deterministic string matching, not embeddings.</strong> Vendor
+identity feeds entry ids; entry ids feed content hashes; content hashes are how “nothing else
+changed” is <em>proven</em>. A model call anywhere in that chain would make the proof vary between
+runs. pgvector is used where the question genuinely is semantic — “does this agreement renew
+automatically” over long prose.</p>
+
+<p><strong>Anti-hallucination is arithmetic, not a prompt.</strong> Every fact carries
+<code>(doc_id, char_start, char_end, quoted_text)</code>. A verifier re-reads
+<code>source[char_start:char_end]</code> and compares. A fabricated payment term produces a span
+that does not hold its quote and dies before the register. Rejected facts are <em>kept</em>, marked
+unsupported — because a system that silently drops what it could not verify looks identical, from
+outside, to one that never hallucinated.</p>
+
+<p><strong>The audit is staged by cost.</strong> Four of the five rules in the demo pack are
+arithmetic and never reach a model; the audit stage spends exactly one call. The judge is
+<em>injected</em> rather than reached for internally, which is what makes “the free stage is
+provably free” testable instead of aspirational.</p>
+
+<h2>Where it breaks — stated deliberately</h2>
+<div class="breaks">
+<ul style="margin-bottom:0">
+  <li><strong>Injection detection is pattern-based</strong>, not semantic. It lands N2 green and is
+  deliberately deterministic — asking a model “is this an injection?” has a model read
+  attacker-controlled text to decide something, which is the shape of problem being defended
+  against. But a novel phrasing outside the pattern list would go unreported. The structural
+  defense still holds in that case; only the reporting would miss.</li>
+  <li><strong>The Anthropic adapter is a stub.</strong> The provider seam is real; no live call has
+  ever gone through this system. A capability may be honestly absent, but it must never be present
+  and broken.</li>
+  <li><strong>Vendor extraction is a regex</strong> and will be brittle on messy real documents. I
+  found and fixed one bug in it late — names wrapping across a line break carried the newline into
+  the entry id.</li>
+  <li><strong><code>impact_set</code> is hash comparison, not evidence tracing.</strong> Correct for
+  what the non-modification invariant asserts, but an update still reconciles the whole corpus.</li>
+  <li><strong>No filesystem watcher and no React UI.</strong> Incremental ingest is built and
+  tested; the watcher is only the trigger. REST and MCP are complete, so the UI would be a third
+  client of operations that already exist.</li>
+</ul>
+</div>
+
+<h2>What I cut from the round, and why</h2>
+<p><strong>Task 2 — the assigned Go CLI — is not built.</strong> Two independent reasons. I had no
+SuperDocs account or API key. And the card’s entire value is release engineering: signed archives,
+checksums, a Homebrew tap, a Scoop manifest, reproducible builds. A Go binary calling four
+endpoints with none of that is precisely the hollow stage the brief warns against. Go 1.26 is
+installed on my machine — this was a time-and-credentials cut, not a capability one, and I would
+rather say that plainly than ship a shell.</p>
+<p>I also spent a meaningful part of the final day recovering from a full disk that stopped
+PostgreSQL, and from discovering late that the project had never been a git repository of its own.
+Both are my own operational mistakes, and both cost hours I would otherwise have spent on the Go CLI.</p>
+
+<h2>AI disclosure</h2>
+<p>Built with heavy use of Claude Code. The architecture, the invariant list, the domain choice and
+every trade-off argued above are mine; most implementation typing and the first drafts of tests were
+AI-assisted under review. The mutation harness exists precisely because I did not want to trust
+either of us about whether the tests were real.</p>
+
+<footer>doctask · Jyotiraditya Singh · built for the SuperDocs Round 2 engineering task</footer>
+
+</body>
+</html>
