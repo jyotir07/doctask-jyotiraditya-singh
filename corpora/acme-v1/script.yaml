@@ -12,6 +12,12 @@ documents:
     facts:
       - {field: payment_terms, value: "Net 30", quote: "Net 30 days from the invoice date"}
       - {field: hourly_rate, value: "USD 145", quote: "USD 145 per hour"}
+    # A deliberate hallucination: the model points at the real late-payment
+    # clause but misquotes the rate. The citation verifier must refuse it, and
+    # the demo shows it doing so.
+    fabricated:
+      - {field: late_payment_interest, value: "5% per month",
+         anchor: "interest at 2% above base rate", quote: "interest at 5% per month"}
 
   amendment-01:
     doc_type: AMENDMENT
