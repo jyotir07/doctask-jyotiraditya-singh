@@ -13,12 +13,14 @@ Built for the SuperDocs Round 2 engineering task.
 
 ## Quick start
 
-Docker Desktop running is the only prerequisite.
+Prerequisites: Docker Desktop running, and Python 3.11+.
 
 ```bash
+make install # .venv with the package and test dependencies
 make up      # PostgreSQL 16 + pgvector, healthy
 make test    # the full suite — NO API KEY REQUIRED
 make demo    # acme-v1, end to end, ingest to committed register
+make serve   # the browser review console on http://localhost:8000
 ```
 
 Then the second run, on different documents inside the same declared set:
@@ -27,9 +29,48 @@ Then the second run, on different documents inside the same declared set:
 make demo CORPUS=globex-v1
 ```
 
+`make reset` empties the demo database. Without it a repeated demo finds every
+document already extracted and correctly skips them all — which is the
+focused-update behaviour working, but not the run you meant to show.
+
+On Windows without `make`, every target has a PowerShell equivalent:
+
+```powershell
+.\scripts\demo.ps1 install
+.\scripts\demo.ps1 up
+.\scripts\demo.ps1 demo -Corpus globex-v1
+.\scripts\demo.ps1 serve
+```
+
 There is no key to configure and nothing to sign up for. `.env.example` works
 untouched, because the default provider is the deterministic fake described
 under [The provider seam](#the-provider-seam).
+
+**If something hangs:** `docker ps` must return instantly. If it does not,
+restart Docker Desktop (it can take a few minutes to answer again). If
+`docker ps` shows no `doctask-db`, run `make up`: with the container stopped,
+commands fail after a 10-second connect timeout per address.
+
+### The browser demo
+
+`make serve`, then open <http://localhost:8000>. The page is a client of the
+REST routes below and can do nothing they cannot. A walk-through that shows all
+three movements:
+
+1. **Understand.** Pick `acme-v1`, untick `appendix-a.pdf` to hold it back, and
+   start the run. It stops at the gate. One claim is shown **refused**: the
+   script deliberately misquotes the late-payment rate, and the citation
+   verifier rejects it before it reaches the register.
+2. **Click any citation.** The source panel shows the stored text with the
+   exact span highlighted, and whether the quote holds against those bytes.
+3. **Examine, and gate it.** Approve some items and reject one with a reason.
+   The payment-terms conflict can be resolved to one value or left disputed.
+   Submit: only what was approved lands.
+4. **Stay alive.** Ingest the held-back `appendix-a`. The new run costs 4
+   provider calls instead of 16, reports exactly one entry changed, and the
+   register outlines that entry — every other entry is byte-identical.
+
+The API explorer is at <http://localhost:8000/docs>.
 
 ## Declared formats and domains
 
@@ -253,7 +294,7 @@ Every test runs against **real PostgreSQL**. Only the model is faked.
 
 ```
 $ make test
-269 passed in 61.16s
+288 passed in 29.62s
 ```
 
 Measured on this machine at the time of writing, not remembered.
@@ -292,14 +333,14 @@ It repeatedly earned its place. Four real gaps it exposed:
 Real output from `make demo` on the six-document `acme-v1` corpus:
 
 ```
-COST    19 provider calls, 3508 in / 354 out, 53 ms
-  audit                1 calls     515 in     27 out       8 ms
-  classify             6 calls    1003 in     59 out       0 ms
-  compose              0 calls       0 in      0 out       8 ms
-  extract              6 calls    1153 in    268 out       0 ms
-  index                6 calls     837 in      0 out      26 ms
-  reconcile            0 calls       0 in      0 out      11 ms
-  verify_citations     0 calls       0 in      0 out       0 ms
+COST    19 provider calls, 3508 in / 389 out, 51 ms
+  audit          1 calls     515 in     27 out       6 ms
+  classify       6 calls    1003 in     59 out       0 ms
+  compose        0 calls       0 in      0 out       2 ms
+  extract        6 calls    1153 in    303 out       0 ms
+  index          6 calls     837 in      0 out      28 ms
+  reconcile      0 calls       0 in      0 out      15 ms
+  verify_citations   0 calls       0 in      0 out       0 ms
 ```
 
 Note what the zeroes prove: `compose`, `reconcile` and `verify_citations` are
@@ -329,7 +370,13 @@ cannot.
 - **REST** (`src/doctask/api.py`) — `POST /runs`, `POST /runs/ingest`,
   `GET /runs/{id}`, `GET /runs/{id}/review`, `POST /runs/{id}/decisions`,
   `POST /runs/{id}/resume`, `GET /runs/{id}/cost`, `GET /runs/{id}/provenance`,
-  `GET /corpora/{id}/deliverable`
+  `GET /corpora/{id}/deliverable`, `GET /corpora/{id}/documents/{doc_id}`
+- **Scripted demo** (same file, enabled when the app is given a corpora
+  directory) — `GET /demo/corpora`, `POST /demo/{corpus}/runs` (optionally
+  holding documents back), `POST /demo/{corpus}/ingest/{doc_id}`. Only starting
+  a run is demo-specific; the gate and every read use the routes above.
+- **Browser** (`src/doctask/static/index.html`, served at `/`) — a client of
+  the REST routes, with no build step and no CDN
 - **MCP** (`src/doctask/mcp_server.py`) — the same operations as tools:
   `start_run`, `ingest_document`, `get_review_bundle`, `decide`, `resume_run`,
   `export_deliverable`, `get_run_cost`, `get_provenance`
@@ -362,10 +409,12 @@ committed: that variable is declared `sync: false`.
 **What a deployed instance can and cannot do.** `AnthropicProvider` is a stub,
 so the only working provider is the deterministic fake, which answers from a
 script keyed on `(stage, doc_id)`. A hosted instance therefore serves every read
-path and the whole gate, but `POST /runs` fails with `MissingScriptEntry` unless
-the submitted documents match a script the process holds. That is a real
-limitation of the stub, not a deployment mistake, and it disappears when the
-live adapter exists.
+path, the whole gate, and the browser demo over the shipped corpora, but
+`POST /runs` with arbitrary documents fails with `MissingScriptEntry`. That is a
+real limitation of the stub, not a deployment mistake, and it disappears when
+the live adapter exists. (The image sets `DOCTASK_ROOT=/app` so the installed
+package can find `corpora/` and `rulepacks/`; I have not built the image since
+adding that.)
 
 ## Assumptions I logged
 
@@ -396,9 +445,10 @@ The brief says a defended cut beats a hollow stage. These are the cuts.
 missing is only the poller that triggers it automatically. `Engine.ingest` is
 the operation a watcher would call.
 
-**The React review interface.** REST and MCP are complete and tested. The UI is
-a third client of operations that already exist, so its absence removes a
-surface, not a capability.
+**The React review interface.** Replaced by a single static page (see
+[The browser demo](#the-browser-demo)): no framework, no build step. It is a
+client of operations that already exist, so the smaller version removes
+polish, not capability.
 
 **Real blast-radius tracing.** `impact_set` is computed by hash comparison
 rather than by tracing evidence. It is correct for what N3 asserts — untouched
@@ -431,6 +481,12 @@ Things that do not work, or work less well than they read.
   it — tests and demos must run without a live key — but it does mean the demo
   shows the *system* working, not a model's extraction quality.
 - **`make demo` was added late** and has had far less use than the test suite.
+- **A human conflict resolution is not remembered across runs.** Resolve
+  payment terms to Net 45, then ingest an unrelated document, and the next run
+  recomposes the entry as disputed again, re-proposes it as changed, and puts
+  the same conflict back in front of the reviewer. Unresolved conflicts are
+  also re-listed at every gate. The fix is to key stored resolutions on the
+  conflict id, which already changes whenever the disagreeing values do.
 
 ---
 
@@ -452,12 +508,14 @@ src/doctask/
   retrieval.py    chunking with offsets, pgvector search
   engine.py       the stages, the gate, commit and post-commit verification
   cost.py         per-stage cost, derived from the journal
-  api.py          FastAPI surface
+  api.py          FastAPI surface, including the scripted demo routes
+  static/         index.html — the browser review console
+  demo.py         loads a demo corpus and turns its script into fake responses
   mcp_server.py   MCP surface
   cli.py          the demo client
 corpora/          acme-v1 (all six formats), globex-v1 (second run)
 rulepacks/        contract-playbook.yaml
-scripts/          mutation_check.py — 30 planted defects
+scripts/          mutation_check.py — 30 planted defects; demo.ps1 — make for Windows
 tests/
   invariants/     the ten NEVER tests
   unit/           parsers, hashing, diff, rules, entities, retrieval
@@ -472,12 +530,3 @@ choice, and every trade-off defended above are mine; the majority of the
 implementation typing, and the first drafts of the test suite, were AI-assisted
 under close review. The mutation-testing harness exists precisely because I did
 not want to trust either of us about whether the tests were real.
-
-
-### to run (post fix):
-- docker ps                                   [must return instantly; if it hangs restart Docker Desktop (~3 min)]
-- docker compose down -v; docker compose up -d --wait        [# clean database, so the full pipeline runs]
-
-- .venv\Scripts\python.exe -m doctask.cli demo --corpus acme-v1
-- .venv\Scripts\python.exe -m doctask.cli demo --corpus globex-v1 --reject-first
-- .venv\Scripts\python.exe -m pytest -q       # ~75s

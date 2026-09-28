@@ -29,7 +29,9 @@ class Store:
 
     def __init__(self, dsn: str) -> None:
         self._dsn = dsn
-        self._conn = psycopg.connect(dsn, autocommit=True)
+        # Bounded, because on Windows a connect to a stopped Docker-published
+        # port can hang rather than being refused.
+        self._conn = psycopg.connect(dsn, autocommit=True, connect_timeout=10)
         if dsn not in Store._migrated_dsns:
             self._migrate()
             Store._migrated_dsns.add(dsn)

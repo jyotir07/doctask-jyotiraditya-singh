@@ -20,7 +20,9 @@ from __future__ import annotations
 import os
 
 from doctask.api import build_app
+from doctask.demo import CORPORA_ROOT, RULE_PACK
 from doctask.llm import AnthropicProvider, FakeProvider
+from doctask.rules import load_rule_pack_file
 from doctask.store import Store
 
 DSN = os.environ.get("DOCTASK_DSN")
@@ -47,7 +49,11 @@ def _provider_factory():
 # a bad DSN fails at boot rather than on someone's first call.
 Store.connect(DSN).close()
 
-app = build_app(provider_factory=_provider_factory, dsn=DSN, api_key=API_KEY)
+app = build_app(
+    provider_factory=_provider_factory, dsn=DSN, api_key=API_KEY,
+    rule_pack=load_rule_pack_file(RULE_PACK) if RULE_PACK.is_file() else None,
+    corpora_root=CORPORA_ROOT if CORPORA_ROOT.is_dir() else None,
+)
 
 
 @app.get("/health")
