@@ -103,6 +103,12 @@ def test_a_citation_indexes_into_the_served_document_text(client):
         assert text[c["char_start"]:c["char_end"]] == c["quoted_text"]
 
 
+def test_the_review_console_is_served_at_the_root(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+
 def test_an_unknown_corpus_is_404(client):
     assert client.post("/demo/nope/runs").status_code == 404
 

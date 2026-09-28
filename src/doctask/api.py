@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Callable
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from doctask.corpus import Corpus
@@ -30,6 +31,9 @@ from doctask.ingest import sha256_bytes
 from doctask.llm import FakeProvider, Provider
 from doctask.rules import RulePack
 from doctask.store import Store
+
+
+STATIC_ROOT = Path(__file__).with_name("static")
 
 
 class DocumentIn(BaseModel):
@@ -318,6 +322,11 @@ def _add_demo_routes(app: FastAPI, *, dsn: str, api_key: str | None,
     def scripted_engine(script: dict, store: Store) -> Engine:
         return Engine(provider=FakeProvider(script), store=store, api_key=api_key,
                       rule_pack=rule_pack)
+
+    @app.get("/", include_in_schema=False)
+    def review_console() -> FileResponse:
+        """The browser client. It calls the same routes as any other client."""
+        return FileResponse(STATIC_ROOT / "index.html")
 
     @app.get("/demo/corpora")
     def list_demo_corpora() -> list[dict]:
