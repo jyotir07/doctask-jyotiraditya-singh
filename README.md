@@ -472,3 +472,12 @@ choice, and every trade-off defended above are mine; the majority of the
 implementation typing, and the first drafts of the test suite, were AI-assisted
 under close review. The mutation-testing harness exists precisely because I did
 not want to trust either of us about whether the tests were real.
+
+
+### to run (post fix):
+- docker ps                                   [must return instantly; if it hangs restart Docker Desktop (~3 min)]
+- docker compose down -v; docker compose up -d --wait        [# clean database, so the full pipeline runs]
+
+- .venv\Scripts\python.exe -m doctask.cli demo --corpus acme-v1
+- .venv\Scripts\python.exe -m doctask.cli demo --corpus globex-v1 --reject-first
+- .venv\Scripts\python.exe -m pytest -q       # ~75s
