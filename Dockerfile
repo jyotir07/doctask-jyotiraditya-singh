@@ -18,6 +18,10 @@ RUN pip install --no-cache-dir .
 COPY rulepacks/ ./rulepacks/
 COPY corpora/ ./corpora/
 
+# Where the demo finds corpora/ and rulepacks/: the package itself is
+# installed into site-packages, away from them.
+ENV DOCTASK_ROOT=/app
+
 # Hosts inject the port they want bound; 8000 is only the local default.
 ENV PORT=8000
 EXPOSE 8000

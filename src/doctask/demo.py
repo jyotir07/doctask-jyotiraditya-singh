@@ -9,13 +9,16 @@ and the same verifier that guards a live run guards this one.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import yaml
 
 from doctask.corpus import Corpus
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# Overridable because a non-editable install (the Docker image) puts this file
+# in site-packages, nowhere near corpora/ and rulepacks/.
+PROJECT_ROOT = Path(os.environ.get("DOCTASK_ROOT") or Path(__file__).resolve().parents[2])
 CORPORA_ROOT = PROJECT_ROOT / "corpora"
 RULE_PACK = PROJECT_ROOT / "rulepacks" / "contract-playbook.yaml"
 
