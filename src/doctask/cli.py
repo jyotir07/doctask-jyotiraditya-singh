@@ -171,14 +171,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
     spec = yaml.safe_load((root / "script.yaml").read_text(encoding="utf-8"))
     provider = FakeProvider(build_script(corpus, spec))
 
-    try:
-        store = Store(DEFAULT_DSN)
-    except Exception as exc:
-        raise SystemExit(
-            f"cannot reach PostgreSQL at {DEFAULT_DSN}\n"
-            f"  {type(exc).__name__}: {exc}\n"
-            f"  run `make up` first"
-        ) from None
+    store = _connect()
 
     try:
         engine = Engine(provider=provider, store=store,
@@ -212,9 +205,49 @@ def cmd_demo(args: argparse.Namespace) -> int:
         store.close()
 
 
+def cmd_reset(args: argparse.Namespace) -> int:
+    """Empty the demo database, so the next demo pays for extraction again.
+
+    Without this a second `demo` finds every document already extracted and
+    shows a run that skipped everything -- correct, but not the run you meant
+    to show.
+    """
+    store = _connect()
+    try:
+        store.reset()
+    finally:
+        store.close()
+    print(f"reset: every table in {_redacted(DEFAULT_DSN)} is empty")
+    return 0
+
+
+def _connect() -> Store:
+    try:
+        return Store(DEFAULT_DSN)
+    except Exception as exc:
+        raise SystemExit(
+            f"cannot reach PostgreSQL at {_redacted(DEFAULT_DSN)}\n"
+            f"  {type(exc).__name__}: {exc}\n"
+            f"  run `make up` first"
+        ) from None
+
+
+def _redacted(dsn: str) -> str:
+    """The DSN with its password removed, for printing (N10)."""
+    if "@" not in dsn or "://" not in dsn:
+        return dsn
+    scheme, rest = dsn.split("://", 1)
+    creds, host = rest.rsplit("@", 1)
+    user = creds.split(":", 1)[0]
+    return f"{scheme}://{user}@{host}"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="doctask")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    reset = sub.add_parser("reset", help="empty the demo database")
+    reset.set_defaults(func=cmd_reset)
 
     demo = sub.add_parser("demo", help="run a corpus end to end and commit it")
     demo.add_argument("--corpus", default="acme-v1")
