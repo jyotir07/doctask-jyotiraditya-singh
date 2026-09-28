@@ -341,3 +341,46 @@ class Store:
                  "decision": r[4], "reason": r[5], "resolution": r[6], "applied": r[7]}
                 for r in cur.fetchall()
             ]
+
+    # --- advisory risk assessments ----------------------------------------
+
+    def get_risk_assessment(self, assessment_key: str) -> dict | None:
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT model_version, risk_level, risk_probabilities, escalation_probability,
+                       finding_category, category_probabilities, assessed_at
+                FROM risk_assessments WHERE assessment_key = %s
+                """,
+                (assessment_key,),
+            )
+            r = cur.fetchone()
+        if r is None:
+            return None
+        return {"model_version": r[0], "risk_level": r[1], "risk_probabilities": r[2],
+                "escalation_probability": r[3], "finding_category": r[4],
+                "category_probabilities": r[5], "assessed_at": r[6].isoformat()}
+
+    def save_risk_assessment(self, assessment_key: str, *, item_kind: str,
+                             model_requested: str, model_version: str, risk_level: str,
+                             risk_probabilities: dict, escalation_probability: float,
+                             finding_category: str, category_probabilities: dict,
+                             input_tokens: int, output_tokens: int) -> None:
+        """First writer wins: two concurrent assessments of the same content
+        were asked the same question, so either answer is the answer."""
+        import json as _json
+
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO risk_assessments
+                    (assessment_key, item_kind, model_requested, model_version, risk_level,
+                     risk_probabilities, escalation_probability, finding_category,
+                     category_probabilities, input_tokens, output_tokens)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (assessment_key) DO NOTHING
+                """,
+                (assessment_key, item_kind, model_requested, model_version, risk_level,
+                 _json.dumps(risk_probabilities), escalation_probability, finding_category,
+                 _json.dumps(category_probabilities), input_tokens, output_tokens),
+            )

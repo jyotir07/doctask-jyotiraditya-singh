@@ -22,6 +22,7 @@ import os
 from doctask.api import build_app
 from doctask.demo import CORPORA_ROOT, RULE_PACK
 from doctask.llm import AnthropicProvider, FakeProvider
+from doctask.risk import JevConfig
 from doctask.rules import load_rule_pack_file
 from doctask.store import Store
 
@@ -53,6 +54,7 @@ app = build_app(
     provider_factory=_provider_factory, dsn=DSN, api_key=API_KEY,
     rule_pack=load_rule_pack_file(RULE_PACK) if RULE_PACK.is_file() else None,
     corpora_root=CORPORA_ROOT if CORPORA_ROOT.is_dir() else None,
+    jev_config=JevConfig.from_env(),
 )
 
 

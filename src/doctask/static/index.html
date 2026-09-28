@@ -77,6 +77,20 @@
             background: var(--bad-bg); color: var(--bad); }
   .claim { border-left: 3px solid var(--bad); padding: 4px 10px; margin: 8px 0; }
   .log li { margin: 2px 0; }
+  .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+            font-size: 13.5px; user-select: none; }
+  .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .switch .track { position: relative; width: 34px; height: 20px; border-radius: 99px;
+                   background: var(--line); transition: background .15s; flex: none; }
+  .switch .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px;
+                          height: 16px; border-radius: 50%; background: var(--panel);
+                          box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+  .switch input:checked + .track { background: var(--accent); }
+  .switch input:checked + .track::after { transform: translateX(14px); }
+  .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+  body:not([data-jev]) .jev-only { display: none !important; }
+  .risk { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0;
+          padding: 5px 8px; border: 1px dashed var(--line); border-radius: 6px; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -84,6 +98,11 @@
   <h1>doctask</h1>
   <p>Understand a pile of contracts, examine it against a playbook, and let a person
      gate every change. The model is the deterministic fake; everything after it is production code.</p>
+  <label class="switch" title="Show Jev's advisory risk read on conflicts and findings">
+    <input type="checkbox" id="jev-toggle" role="switch">
+    <span class="track"></span> Risk intelligence
+  </label>
+  <span class="tag jev-only" id="jev-status" hidden></span>
   <a href="/docs">API docs</a>
 </header>
 <div id="banner" role="alert"></div>
@@ -116,7 +135,10 @@
       <div class="row">
         <button id="approve-all">Approve all</button>
         <button class="primary" id="submit">Submit decisions</button>
+        <button id="assess-risk" class="jev-only">Re-assess risk</button>
       </div>
+      <p class="small muted jev-only">Risk intelligence is advisory. It never approves, rejects or commits,
+         and the rules above it and your decisions stay authoritative.</p>
       <div id="items"></div>
     </section>
 
@@ -159,7 +181,7 @@
 // held: unticked in the picker. pending: held back by the current session's
 // first run and not yet ingested.
 const state = { corpora: [], corpus: null, held: [], pending: [], run: null,
-                items: [], decisions: {}, texts: {} };
+                items: [], decisions: {}, texts: {}, risk: {} };
 const $ = (id) => document.getElementById(id);
 
 function h(tag, attrs, ...children) {
@@ -252,8 +274,10 @@ async function openRun(runBody, verb) {
   state.run = runBody;
   state.texts = {};
   state.decisions = {};
+  state.risk = {};
   log(`${verb} ${runBody.run_id}: ${runBody.documents?.join(", ") ?? ""}`);
   await refreshRun();
+  if (state.jev && state.run.status === "awaiting_review") await assessRisk();
 }
 
 async function refreshRun() {
@@ -261,6 +285,10 @@ async function refreshRun() {
   state.run = { ...state.run, ...run };
   const review = await api("GET", `/runs/${run.run_id}/review`);
   state.items = review.items;
+  const chip = $("jev-status");
+  chip.hidden = false;
+  chip.textContent = review.risk_enabled ? "Jev enabled" : "Jev off on server";
+  chip.className = `tag jev-only ${review.risk_enabled ? "ok" : ""}`;
 
   $("run-panel").hidden = false;
   $("run-id").textContent = run.run_id;
@@ -303,9 +331,34 @@ function citationsOf(item) {
   return p.citation ? [p.citation] : [];
 }
 
+const RISK_TONE = { low: "ok", medium: "", high: "warn", critical: "bad" };
+const RISK_REASON = {
+  disabled: "not enabled on this server", missing_key: "no API key configured",
+  timeout: "timed out", auth_failed: "authentication failed", rate_limited: "rate limited",
+  upstream_error: "service error", invalid_response: "unreadable response",
+};
+
+function riskPanel(risk) {
+  if (!risk) return null;
+  const label = h("span", { class: "muted" }, "Risk intelligence · advisory");
+  if (risk.status === "not_assessed") return h("div", { class: "risk" }, label, h("span", { class: "muted" }, "not assessed"));
+  if (risk.status === "unavailable") {
+    return h("div", { class: "risk" }, label,
+      h("span", { class: "tag" }, "Assessment unavailable"),
+      h("span", { class: "muted" }, RISK_REASON[risk.reason] ?? risk.reason));
+  }
+  return h("div", { class: "risk" }, label,
+    h("span", { class: `tag ${RISK_TONE[risk.risk_level] ?? ""}` }, `${risk.risk_level} risk`),
+    h("span", { class: "tag" }, risk.finding_category.replace("_", " ")),
+    h("span", {}, `escalation ${Math.round(risk.escalation_probability * 100)}%`),
+    h("span", { class: "muted", title: `${risk.model_version} · ${risk.assessed_at}` },
+      risk.cached ? "assessed (stored)" : "assessed"));
+}
+
 function renderItems(open) {
   $("gate-panel").hidden = false;
   $("approve-all").disabled = !open;
+  $("assess-risk").disabled = !state.items.some((i) => i.risk);
   $("submit").disabled = !open;
   if (!state.items.length) {
     $("items").replaceChildren(h("p", { class: "muted" }, "Nothing proposed."));
@@ -335,6 +388,7 @@ function renderItems(open) {
     return h("div", { class: "item" },
       h("div", { class: "row" }, h("span", { class: "tag" }, item.kind), outcome),
       h("div", { class: "summary" }, item.summary),
+      state.jev ? riskPanel(state.risk[item.item_id] ?? item.risk) : null,
       ...citationsOf(item).map(citeButton),
       open ? h("div", { class: "choices" }, radio("approve", "Approve"), radio("reject", "Reject"), resolution) : null,
       open ? h("input", { type: "text", placeholder: "reason (recorded with the decision)", value: d.reason,
@@ -420,6 +474,31 @@ $("approve-all").addEventListener("click", () => {
   renderItems(true);
 });
 $("submit").addEventListener("click", () => act(submitDecisions));
+async function assessRisk() {
+  const res = await api("POST", `/runs/${state.run.run_id}/risk`);
+  // Kept so a failure's reason survives the refresh: failures are not stored.
+  state.risk = res.items;
+  const all = Object.values(res.items);
+  const done = all.filter((r) => r.status === "assessed").length;
+  log(`risk: ${done} of ${all.length} item(s) assessed${res.enabled ? "" : " (Jev not enabled)"}`);
+  await refreshRun();
+}
+$("assess-risk").addEventListener("click", () => act(assessRisk));
+
+// A view switch, not a server switch: whether Jev may be called at all is
+// server configuration. Off, the console is exactly the one without Jev.
+function setJev(on) {
+  state.jev = on;
+  $("jev-toggle").checked = on;
+  if (on) document.body.dataset.jev = "1"; else delete document.body.dataset.jev;
+  try { localStorage.setItem("doctask.jev", on ? "1" : "0"); } catch {}
+  if (state.run) renderItems(state.run.status === "awaiting_review");
+}
+$("jev-toggle").addEventListener("change", (e) => {
+  setJev(e.target.checked);
+  if (e.target.checked && state.run?.status === "awaiting_review") act(assessRisk);
+});
+try { setJev(localStorage.getItem("doctask.jev") === "1"); } catch { setJev(false); }
 
 act(loadCorpora);
 </script>

@@ -63,6 +63,11 @@ three movements:
    verifier rejects it before it reaches the register.
 2. **Click any citation.** The source panel shows the stored text with the
    exact span highlighted, and whether the quote holds against those bytes.
+   *Optional:* flip the **Risk intelligence** switch in the header for Jev's
+   advisory read of each conflict and finding (see
+   [Risk intelligence](#risk-intelligence-optional-advisory)). With the switch
+   off the console is unchanged; with Jev off on the server, each item says
+   *Assessment unavailable* and nothing else changes.
 3. **Examine, and gate it.** Approve some items and reject one with a reason.
    The payment-terms conflict can be resolved to one value or left disputed.
    Submit: only what was approved lands.
@@ -370,7 +375,8 @@ cannot.
 - **REST** (`src/doctask/api.py`) — `POST /runs`, `POST /runs/ingest`,
   `GET /runs/{id}`, `GET /runs/{id}/review`, `POST /runs/{id}/decisions`,
   `POST /runs/{id}/resume`, `GET /runs/{id}/cost`, `GET /runs/{id}/provenance`,
-  `GET /corpora/{id}/deliverable`, `GET /corpora/{id}/documents/{doc_id}`
+  `POST /runs/{id}/risk`, `GET /corpora/{id}/deliverable`,
+  `GET /corpora/{id}/documents/{doc_id}`
 - **Scripted demo** (same file, enabled when the app is given a corpora
   directory) — `GET /demo/corpora`, `POST /demo/{corpus}/runs` (optionally
   holding documents back), `POST /demo/{corpus}/ingest/{doc_id}`. Only starting
@@ -379,11 +385,126 @@ cannot.
   the REST routes, with no build step and no CDN
 - **MCP** (`src/doctask/mcp_server.py`) — the same operations as tools:
   `start_run`, `ingest_document`, `get_review_bundle`, `decide`, `resume_run`,
-  `export_deliverable`, `get_run_cost`, `get_provenance`
+  `export_deliverable`, `get_run_cost`, `get_provenance`, `assess_risk`
 - **CLI** (`src/doctask/cli.py`) — what `make demo` drives
 
 Approval is an explicit operation on all three surfaces, so a program can drive
 the entire flow, gate included, without a human touching a UI.
+
+---
+
+## Risk intelligence (optional, advisory)
+
+An optional Jev-backed second opinion on the conflicts and findings waiting at
+the gate. It is **off by default**, and nothing in the three movements depends
+on it.
+
+### What it does
+
+`POST /runs/{id}/risk` (the MCP `assess_risk` tool, or **Assess risk** in the
+browser) sends each `conflict` and `finding` review item to Jev
+(`POST {DOCTASK_JEV_BASE_URL}/v1/systemone`, model `jev-latest`). It asks three
+typed questions in one request:
+
+| Question | Type | Answers |
+|---|---|---|
+| `risk_level` | choice | `low` · `medium` · `high` · `critical` |
+| `needs_escalation` | noul | probability of "yes, escalate" |
+| `finding_category` | choice | `conflict` · `policy_violation` · `unsupported_claim` · `other` |
+
+The answers appear on each item in `GET /runs/{id}/review` under `risk`. In the
+browser, the **Risk intelligence** switch in the header shows them as a compact
+block on each item: a risk badge, the category, the escalation percentage and
+the status, labelled **advisory**. Turning the switch on assesses the open run.
+The switch is only a view setting and remembers its state per browser.
+Whether Jev may be called at all is server configuration, never something a
+browser can turn on; the chip beside the switch shows which.
+Plain register entries are not assessed; they are not findings.
+
+**What Jev sees** is bounded by `assessment_state()`: the item's kind, summary,
+rule id or conflict values, and at most five cited spans of at most 500
+characters each. It never sees whole documents or the register, and it never
+sees the system's `suggested_resolution`, so the model is not nudged by it.
+
+### Why it cannot touch the gate
+
+The boundary is structural, not a convention. `RiskAssessor` holds a `Store`
+and an HTTP client, never an `Engine`, and it writes only to its own
+`risk_assessments` table. Deterministic validation has already run by the time
+a run reaches the gate, and the assessor runs after that. Nothing in `engine.py`,
+the rule evaluator, decisions or commit reads its output. Tests prove this with
+a "critical, escalate" verdict: it changes no decision and no finding, and it
+cannot stop an approval. A "low, no escalation" verdict removes no rule finding.
+
+### Setup
+
+```bash
+DOCTASK_JEV_ENABLED=true
+JEVMODEL_API_KEY=...                      # server-side only
+DOCTASK_JEV_BASE_URL=https://jevmodel.org # default
+DOCTASK_JEV_TIMEOUT_S=10                  # default
+```
+
+`asgi.py`, the MCP server's `main()` and the CLI read these from the process
+environment (nothing loads `.env` automatically). The key lives on a
+private attribute of `JevClient`, is excluded from `JevConfig`'s repr, and
+appears in no response, row, error message or log line. A test with an
+upstream that echoes the request headers back proves it.
+
+CLI demo with the extra step:
+
+```bash
+python -m doctask.cli demo --corpus acme-v1 --assess-risk
+```
+
+### Fallback
+
+Every failure degrades to `"status": "unavailable"` with a reason on the item,
+never an error on the request: `disabled`, `missing_key`, `timeout`,
+`auth_failed`, `rate_limited`, `upstream_error` or `invalid_response`. The
+browser shows **Assessment unavailable** and the review works exactly as it
+does with the feature off. A timeout, an auth failure or a rate limit stops the
+loop after the first item, because they would repeat identically for the rest.
+
+The parser is strict. An answer outside the declared options or types, or a
+probability outside [0, 1], is `invalid_response`, never a guess.
+
+### Cost and idempotency
+
+- **Assessments are keyed by content.** The key is
+  `sha256(question-set version, model, bounded state)`, not the run or item id.
+  An unchanged finding re-proposed by a later run, such as the payment-terms
+  conflict after `appendix-a` arrives, costs **zero calls**. A test asserts
+  exactly that.
+- **Only successes are stored.** A failed assessment can be retried later.
+- **Each row records** the model version Jev reports (for example
+  `jev-1.13.0`), the timestamp, and the input and output tokens.
+- **Retries happen at most once**, and only where the first attempt was not
+  processed: a 429 or 529, or a connection that never opened. A read timeout is
+  **never** retried, because the request may already have been billed.
+- **The same key goes out as an `Idempotency-Key` header**, identical across
+  retries and across runs.
+
+### Limitations
+
+- **Server-side deduplication is unverified.** I could not find the
+  `Idempotency-Key` header in the public Jev API reference, so I cannot confirm
+  the service deduplicates on it. The local content-keyed cache is what
+  actually guarantees a finding is paid for once. The header is extra
+  protection, not the mechanism.
+- **Tested against mocks only.** Every test runs against `httpx.MockTransport`.
+  The integration has not been exercised against the live endpoint with a real
+  key, so treat the first live run as a check of the wire format.
+- **The cache pins the first answer.** The cache keys on the requested model
+  name (`jev-latest`), not the version that answered, so an assessment made
+  before a model upgrade is kept. Bumping `QUESTION_SET_VERSION` in `risk.py`
+  invalidates every stored assessment.
+- **Jev calls are not in the run's cost panel.** They are recorded in
+  `risk_assessments` rather than the run journal, because the assessment
+  belongs to the content and not to a run.
+- **The risk calibration is unvalidated.** Jev's risk levels are a model's
+  judgement, and no one has checked them against labelled outcomes in this
+  domain. That is the other reason they are advisory.
 
 ---
 
@@ -509,6 +630,7 @@ src/doctask/
   engine.py       the stages, the gate, commit and post-commit verification
   cost.py         per-stage cost, derived from the journal
   api.py          FastAPI surface, including the scripted demo routes
+  risk.py         optional, advisory Jev risk assessment of conflicts and findings
   static/         index.html — the browser review console
   demo.py         loads a demo corpus and turns its script into fake responses
   mcp_server.py   MCP surface
