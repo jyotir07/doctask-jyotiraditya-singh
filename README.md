@@ -653,3 +653,7 @@ choice, and every trade-off defended above are mine; the majority of the
 implementation typing, and the first drafts of the test suite, were AI-assisted
 under close review. The mutation-testing harness exists precisely because I did
 not want to trust either of us about whether the tests were real.
+
+to run(post fix):
+- docker ps
+-  .\scripts\demo.ps1 up / reset / serve / down 
