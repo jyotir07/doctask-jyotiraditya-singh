@@ -445,8 +445,9 @@ DOCTASK_JEV_BASE_URL=https://jevmodel.org # default
 DOCTASK_JEV_TIMEOUT_S=10                  # default
 ```
 
-`asgi.py`, the MCP server's `main()` and the CLI read these from the process
-environment (nothing loads `.env` automatically). The key lives on a
+The server (`asgi.py`, i.e. `make serve`) also reads them from a local `.env`,
+without overriding variables already set in the environment. The CLI and the
+MCP server's `main()` read the process environment only. The key lives on a
 private attribute of `JevClient`, is excluded from `JevConfig`'s repr, and
 appears in no response, row, error message or log line. A test with an
 upstream that echoes the request headers back proves it.
