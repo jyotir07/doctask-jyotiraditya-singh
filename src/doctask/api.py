@@ -11,12 +11,14 @@ is deliberately no capability on either surface that the other lacks.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Callable
 
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from doctask.corpus import Corpus
+from doctask.demo import ScriptError, UnknownCorpus, available_corpora, load_demo
 from doctask.domain import Decision, Document, ReviewDecision
 from doctask.engine import Engine
 from doctask.errors import (
@@ -25,7 +27,8 @@ from doctask.errors import (
     UnknownReviewItem,
 )
 from doctask.ingest import sha256_bytes
-from doctask.llm import Provider
+from doctask.llm import FakeProvider, Provider
+from doctask.rules import RulePack
 from doctask.store import Store
 
 
@@ -55,6 +58,12 @@ class DecisionIn(BaseModel):
 
 class DecisionsIn(BaseModel):
     decisions: list[DecisionIn]
+
+
+class DemoRunIn(BaseModel):
+    # Documents left out of the first run, so they can arrive later through
+    # the ingest endpoint and show a focused update.
+    hold_back: list[str] = []
 
 
 def _to_document(payload: DocumentIn) -> Document:
@@ -94,7 +103,9 @@ def _citation(c) -> dict:
 
 
 def build_app(*, provider_factory: Callable[[], Provider], dsn: str,
-              api_key: str | None = None) -> FastAPI:
+              api_key: str | None = None, rule_pack: RulePack | None = None,
+              corpora_root: Path | None = None) -> FastAPI:
+    """`corpora_root` turns on the scripted demo routes under /demo."""
     app = FastAPI(title="doctask", version="0.1.0")
 
     def get_engine() -> Engine:
@@ -103,7 +114,8 @@ def build_app(*, provider_factory: Callable[[], Provider], dsn: str,
         # keeps the API honest about where state lives.
         store = Store.connect(dsn)
         try:
-            yield Engine(provider=provider_factory(), store=store, api_key=api_key)
+            yield Engine(provider=provider_factory(), store=store, api_key=api_key,
+                         rule_pack=rule_pack)
         finally:
             store.close()
 
@@ -263,4 +275,94 @@ def build_app(*, provider_factory: Callable[[], Provider], dsn: str,
             ],
         }
 
+    @app.get("/corpora/{corpus_id}/documents/{doc_id}")
+    def get_document(corpus_id: str, doc_id: str) -> dict:
+        """The stored text every citation's offsets index into."""
+        store = Store.connect(dsn)
+        try:
+            rows = store.documents_for(corpus_id)
+        finally:
+            store.close()
+        row = next((d for d in rows if d["doc_id"] == doc_id), None)
+        if row is None:
+            raise HTTPException(
+                status_code=404, detail=f"no document {doc_id!r} in corpus {corpus_id!r}"
+            )
+        return {key: row[key] for key in
+                ("doc_id", "filename", "media_type", "doc_type", "vendor", "text")}
+
+    if corpora_root is not None:
+        _add_demo_routes(app, dsn=dsn, api_key=api_key, rule_pack=rule_pack,
+                         corpora_root=corpora_root)
+
     return app
+
+
+def _add_demo_routes(app: FastAPI, *, dsn: str, api_key: str | None,
+                     rule_pack: RulePack | None, corpora_root: Path) -> None:
+    """Runs over the shipped corpora, answered by their scripts.
+
+    Everything after the provider -- verification, reconciliation, the gate,
+    commit -- is the same code POST /runs uses. Decisions and reads go through
+    the ordinary routes: nothing past starting a run is demo-specific.
+    """
+
+    def load(name: str):
+        try:
+            return load_demo(name, corpora_root)
+        except UnknownCorpus as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from None
+        except ScriptError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from None
+
+    def scripted_engine(script: dict, store: Store) -> Engine:
+        return Engine(provider=FakeProvider(script), store=store, api_key=api_key,
+                      rule_pack=rule_pack)
+
+    @app.get("/demo/corpora")
+    def list_demo_corpora() -> list[dict]:
+        corpora = []
+        for name in available_corpora(corpora_root):
+            corpus, _ = load(name)
+            corpora.append({
+                "corpus_id": name,
+                "documents": [
+                    {"doc_id": d.doc_id, "filename": d.filename, "media_type": d.media_type}
+                    for d in corpus.documents
+                ],
+            })
+        return corpora
+
+    @app.post("/demo/{name}/runs", status_code=201)
+    def start_demo_run(name: str, body: DemoRunIn | None = None) -> dict:
+        corpus, script = load(name)
+        held = set((body or DemoRunIn()).hold_back)
+        unknown = held - {d.doc_id for d in corpus.documents}
+        if unknown:
+            raise HTTPException(
+                status_code=422, detail=f"not in {name}: {', '.join(sorted(unknown))}"
+            )
+        included = [d for d in corpus.documents if d.doc_id not in held]
+        store = Store.connect(dsn)
+        try:
+            run = scripted_engine(script, store).start_run(
+                Corpus.from_documents(included, corpus_id=name)
+            )
+        finally:
+            store.close()
+        return {**_run_body(run), "documents": [d.doc_id for d in included],
+                "held_back": sorted(held)}
+
+    @app.post("/demo/{name}/ingest/{doc_id}", status_code=201)
+    def ingest_demo_document(name: str, doc_id: str) -> dict:
+        """One document arriving after the rest: a focused update."""
+        corpus, script = load(name)
+        document = next((d for d in corpus.documents if d.doc_id == doc_id), None)
+        if document is None:
+            raise HTTPException(status_code=404, detail=f"no document {doc_id!r} in {name}")
+        store = Store.connect(dsn)
+        try:
+            run = scripted_engine(script, store).ingest(corpus, document)
+        finally:
+            store.close()
+        return {**_run_body(run), "documents": [doc_id]}
