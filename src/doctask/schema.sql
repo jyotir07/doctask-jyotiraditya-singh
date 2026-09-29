@@ -149,3 +149,21 @@ CREATE TABLE IF NOT EXISTS chunks (
 );
 
 CREATE INDEX IF NOT EXISTS chunks_doc_idx ON chunks (doc_sha256);
+
+-- Advisory risk assessments from Jev. Keyed by content (see risk.assessment_key)
+-- rather than by run, so an unchanged finding re-proposed by a later run is
+-- never paid for twice. Nothing in the gate or commit path reads this table.
+CREATE TABLE IF NOT EXISTS risk_assessments (
+    assessment_key         TEXT PRIMARY KEY,
+    item_kind              TEXT NOT NULL,
+    model_requested        TEXT NOT NULL,
+    model_version          TEXT NOT NULL,
+    risk_level             TEXT NOT NULL,
+    risk_probabilities     JSONB NOT NULL,
+    escalation_probability DOUBLE PRECISION NOT NULL,
+    finding_category       TEXT NOT NULL,
+    category_probabilities JSONB NOT NULL,
+    input_tokens           INTEGER NOT NULL DEFAULT 0,
+    output_tokens          INTEGER NOT NULL DEFAULT 0,
+    assessed_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);

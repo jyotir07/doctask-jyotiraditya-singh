@@ -29,6 +29,7 @@ from doctask.errors import (
 )
 from doctask.ingest import sha256_bytes
 from doctask.llm import FakeProvider, Provider
+from doctask.risk import JevClient, JevConfig, RiskAssessor
 from doctask.rules import RulePack
 from doctask.store import Store
 
@@ -108,20 +109,30 @@ def _citation(c) -> dict:
 
 def build_app(*, provider_factory: Callable[[], Provider], dsn: str,
               api_key: str | None = None, rule_pack: RulePack | None = None,
-              corpora_root: Path | None = None) -> FastAPI:
-    """`corpora_root` turns on the scripted demo routes under /demo."""
-    app = FastAPI(title="doctask", version="0.1.0")
+              corpora_root: Path | None = None, jev_config: JevConfig | None = None,
+              jev_client_factory: Callable[[], JevClient] | None = None) -> FastAPI:
+    """`corpora_root` turns on the scripted demo routes under /demo.
 
-    def get_engine() -> Engine:
-        # One store per request. The engine holds no run state in memory --
-        # everything a later call needs is in PostgreSQL -- so this is safe and
-        # keeps the API honest about where state lives.
+    `jev_config` turns on advisory risk assessment; without it every item
+    reports its assessment as unavailable and the review is otherwise identical.
+    """
+    app = FastAPI(title="doctask", version="0.1.0")
+    jev_config = jev_config or JevConfig()
+
+    def get_store() -> Store:
+        # One store per request, shared by everything the request depends on.
+        # The engine holds no run state in memory -- everything a later call
+        # needs is in PostgreSQL -- so this is safe and keeps the API honest
+        # about where state lives.
         store = Store.connect(dsn)
         try:
-            yield Engine(provider=provider_factory(), store=store, api_key=api_key,
-                         rule_pack=rule_pack)
+            yield store
         finally:
             store.close()
+
+    def get_engine(store: Store = Depends(get_store)) -> Engine:
+        return Engine(provider=provider_factory(), store=store, api_key=api_key,
+                      rule_pack=rule_pack)
 
     @app.post("/runs", status_code=201)
     def start_run(body: StartRunIn, engine: Engine = Depends(get_engine)) -> dict:
@@ -144,14 +155,20 @@ def build_app(*, provider_factory: Callable[[], Provider], dsn: str,
             raise HTTPException(status_code=404, detail=str(exc)) from None
 
     @app.get("/runs/{run_id}/review")
-    def get_review(run_id: str, engine: Engine = Depends(get_engine)) -> dict:
+    def get_review(run_id: str, engine: Engine = Depends(get_engine),
+                   store: Store = Depends(get_store)) -> dict:
         try:
             run = engine.get_run(run_id)
         except UnknownReviewItem as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from None
+        risk = RiskAssessor(store, jev_config).lookup(
+            [{"item_id": i.item_id, "kind": i.kind.value, "summary": i.summary,
+              "payload": i.payload} for i in run.review_bundle.items]
+        )
         return {
             "run_id": run_id,
             "status": run.status.value,
+            "risk_enabled": jev_config.enabled,
             "items": [
                 {
                     "item_id": i.item_id,
@@ -161,10 +178,26 @@ def build_app(*, provider_factory: Callable[[], Provider], dsn: str,
                     "decision": i.decision.value if i.decision else None,
                     "reason": i.reason,
                     "applied": i.applied,
+                    "risk": risk.get(i.item_id),
                 }
                 for i in run.review_bundle.items
             ],
         }
+
+    @app.post("/runs/{run_id}/risk")
+    def assess_risk(run_id: str, store: Store = Depends(get_store)) -> dict:
+        """Advisory risk assessment of the run's conflicts and findings.
+
+        Never changes a decision, a finding, or the register. A Jev failure is
+        reported per item as unavailable, not as an error on this request.
+        """
+        assessor = RiskAssessor(store, jev_config, jev_client_factory)
+        try:
+            results = assessor.assess_run(run_id)
+        except UnknownReviewItem as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from None
+        return {"run_id": run_id, "advisory": True, "enabled": jev_config.enabled,
+                "items": results}
 
     @app.post("/runs/{run_id}/decisions")
     def decide(run_id: str, body: DecisionsIn,

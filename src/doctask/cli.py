@@ -24,6 +24,7 @@ from doctask.domain import Decision, EntryState, ReviewDecision
 from doctask.engine import Engine
 from doctask.llm import FakeProvider
 from doctask.provenance import verify_citation
+from doctask.risk import JevConfig, RiskAssessor
 from doctask.rules import load_rule_pack_file
 from doctask.store import Store
 
@@ -85,6 +86,24 @@ def _print_unsupported(run, corpus) -> None:
               f"{c.quoted_text!r}, source says {by_id[c.doc_id].text[c.char_start:c.char_end]!r}")
 
 
+def _print_risk(run, store) -> None:
+    results = RiskAssessor(store, JevConfig.from_env()).assess_run(run.run_id)
+    print()
+    print(RULE)
+    print(f"RISK    advisory Jev assessment of {len(results)} conflicts and findings")
+    print(RULE)
+    for item in run.review_bundle.items:
+        r = results.get(item.item_id)
+        if r is None:
+            continue
+        if r["status"] == "assessed":
+            print(f"  {item.item_id[:20]:<20} {r['risk_level']:<8} {r['finding_category']:<17} "
+                  f"escalate {r['escalation_probability']:.0%}")
+        else:
+            print(f"  {item.item_id[:20]:<20} assessment unavailable ({r['reason']})")
+    print("  Advisory only: the decisions below are made without reading it.")
+
+
 def _print_cost(run) -> None:
     c = run.cost
     print()
@@ -128,6 +147,8 @@ def cmd_demo(args: argparse.Namespace) -> int:
         _print_findings(run, corpus)
         _print_unsupported(run, corpus)
         _print_gate(run)
+        if args.assess_risk:
+            _print_risk(run, store)
 
         decisions = [
             ReviewDecision(item_id=i.item_id, decision=Decision.APPROVE,
@@ -198,6 +219,8 @@ def main(argv: list[str] | None = None) -> int:
     demo.add_argument("--corpus", default="acme-v1")
     demo.add_argument("--reject-first", action="store_true",
                       help="reject the first review item, to show the gate is per-item")
+    demo.add_argument("--assess-risk", action="store_true",
+                      help="add the optional, advisory Jev risk assessment before the gate")
     demo.set_defaults(func=cmd_demo)
 
     args = parser.parse_args(argv)

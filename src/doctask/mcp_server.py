@@ -21,12 +21,15 @@ from doctask.domain import Decision, Document, ReviewDecision
 from doctask.engine import Engine
 from doctask.ingest import sha256_bytes
 from doctask.llm import FakeProvider, Provider
+from doctask.risk import JevClient, JevConfig, RiskAssessor
 from doctask.store import Store
 
 
 def build_server(*, provider_factory: Callable[[], Provider], dsn: str,
-                 api_key: str | None = None) -> MCPServer:
+                 api_key: str | None = None, jev_config: JevConfig | None = None,
+                 jev_client_factory: Callable[[], JevClient] | None = None) -> MCPServer:
     server = MCPServer("doctask")
+    jev_config = jev_config or JevConfig()
 
     def engine() -> tuple[Engine, Store]:
         store = Store.connect(dsn)
@@ -88,12 +91,18 @@ def build_server(*, provider_factory: Callable[[], Provider], dsn: str,
         eng, store = engine()
         try:
             run = eng.get_run(run_id)
+            risk = RiskAssessor(store, jev_config).lookup(
+                [{"item_id": i.item_id, "kind": i.kind.value, "summary": i.summary,
+                  "payload": i.payload} for i in run.review_bundle.items]
+            )
             return {
                 "run_id": run_id,
                 "status": run.status.value,
+                "risk_enabled": jev_config.enabled,
                 "items": [
                     {"item_id": i.item_id, "kind": i.kind.value, "summary": i.summary,
-                     "payload": i.payload, "decision": i.decision.value if i.decision else None}
+                     "payload": i.payload, "decision": i.decision.value if i.decision else None,
+                     "risk": risk.get(i.item_id)}
                     for i in run.review_bundle.items
                 ],
             }
@@ -124,6 +133,22 @@ def build_server(*, provider_factory: Callable[[], Provider], dsn: str,
             )
             return {"run_id": run.run_id, "status": run.status.value,
                     "applied": [i.item_id for i in run.review_bundle.items if i.applied]}
+        finally:
+            store.close()
+
+    @server.tool()
+    def assess_risk(run_id: str) -> dict[str, Any]:
+        """Advisory risk assessment of a run's conflicts and findings.
+
+        Returns, per item, a risk level, an escalation probability and a
+        category -- or "unavailable" with a reason. Advisory only: it never
+        approves, rejects, commits, or changes a finding. Decide with `decide`.
+        """
+        store = Store.connect(dsn)
+        try:
+            results = RiskAssessor(store, jev_config, jev_client_factory).assess_run(run_id)
+            return {"run_id": run_id, "advisory": True, "enabled": jev_config.enabled,
+                    "items": results}
         finally:
             store.close()
 
@@ -195,7 +220,8 @@ def build_server(*, provider_factory: Callable[[], Provider], dsn: str,
 
 def main() -> None:  # pragma: no cover - process entry point
     dsn = os.environ.get("DOCTASK_DSN", "postgresql://doctask:doctask@localhost:5433/doctask")
-    build_server(provider_factory=lambda: FakeProvider({}), dsn=dsn).run()
+    build_server(provider_factory=lambda: FakeProvider({}), dsn=dsn,
+                 jev_config=JevConfig.from_env()).run()
 
 
 if __name__ == "__main__":  # pragma: no cover
