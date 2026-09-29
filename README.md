@@ -657,3 +657,9 @@ not want to trust either of us about whether the tests were real.
 to run(post fix):
 - docker ps
 -  .\scripts\demo.ps1 up / reset / serve / down 
+
+tests:
+- .venv\Scripts\python.exe -m doctask.cli demo --corpus acme-v1
+- .venv\Scripts\python.exe -m doctask.cli demo --corpus globex-v1 --reject-first
+- .venv\Scripts\python.exe -m pytest -q 
+- pytest tests/invariants -v 
